@@ -29,7 +29,7 @@
 #include <omp.h>
 
 //#define N_SDSS 5789198
-#define N_SDSS 1000
+#define N_SDSS 100
 #define N_PX_MAX 6000
 #define N_TEMPLATES 3078
 
@@ -67,8 +67,8 @@ void progress_bar(unsigned int n, unsigned int N);
 unsigned int set_N_threads(int argc, char **argv);
 void parallel_section(template *TT, FILE *input, FILE *output);
 void process_pixels(float *data_buffer, unsigned int N_file, spectrum *Sptr);
-inline void interpolate_template(template T, spectrum S);
-inline double calc_chisq(spectrum S);
+void interpolate_template(template T, spectrum S);
+double calc_chisq(spectrum S);
 
 /******************************* End preamble ********************************/
 
@@ -326,22 +326,19 @@ void process_pixels(float *data_buffer, unsigned int N_file, spectrum *Sptr)
 }
 
 /*Interpolate a template onto the spectrum axis and store in spectrum*/
-inline void interpolate_template(template T, spectrum S)
+void interpolate_template(template T, spectrum S)
 {
   unsigned int i, j=1;
-  double M, C;
 
   for(i=0; i<S.N; ++i) /*only need to condition the loop on i, since spec stops before template*/
   {
     while(T.x[j] < S.x[i]) ++j;
-    M = T.y[j] - T.y[j-1];
-    C = T.y[j-1] * T.x[j] - T.y[j] * T.x[j-1];
-    S.Ti[i] = (M*S.x[i] + C)/(T.x[j] - T.x[j-1]);
+    S.Ti[i] = T.y[j-1] + (S.x[i]-T.x[j-1])*(T.y[j]-T.y[j-1])/(T.x[j]-T.x[j-1]);
   }
 }
 
 /*Calculate the chisq between the template and interpolated spectrum*/
-inline double calc_chisq(spectrum S)
+double calc_chisq(spectrum S)
 {
   unsigned int i;
   double Sum_st=0, Sum_tt=0, A, temp, chisq=0;
