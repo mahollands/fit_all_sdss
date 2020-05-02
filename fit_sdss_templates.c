@@ -338,18 +338,18 @@ inline void interpolate_template(template T, spectrum S)
 inline double calc_chisq(spectrum S)
 {
   unsigned int i;
-  double S_st=0, S_tt=0, A, temp, chisq=0;
+  double Sum_st=0, Sum_tt=0, A, temp, chisq=0;
 
   /* Find optimal scaling parameter*/
-  #pragma omp simd private(temp) reduction(+:S_tt,S_st)
+  #pragma omp simd private(temp) reduction(+:Sum_tt,Sum_st)
   for(i=0; i<S.N; ++i)
   {
     temp = S.Ti[i] * S.ivar[i];
-    S_tt += S.Ti[i] * temp;
-    S_st += S.y[i] * temp;
+    Sum_tt += S.Ti[i] * temp;
+    Sum_st += S.y[i] * temp;
   }
   /* optimal A */
-  A = S_st/S_tt; 
+  A = Sum_st/Sum_tt; 
 
   /*calc chisq with optimal A*/
   #pragma omp simd private(temp) reduction(+:chisq)
