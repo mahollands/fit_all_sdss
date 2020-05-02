@@ -119,6 +119,7 @@ void load_templates(template *TT)
   double temp1, temp2;
   FILE *input;
   char tname_full[128];
+  template T;
 
   puts("loading templates");
 
@@ -138,10 +139,12 @@ void load_templates(template *TT)
   fclose(input);
 
   /*Read template files in parallel*/
-  #pragma omp parallel for default(shared) private(i,j,input,tname_full,temp1,temp2)
+  #pragma omp parallel for default(shared) private(i,j,input,tname_full,temp1,temp2,T)
   for(i=0; i<N_TEMPLATES; ++i)
   {
-    sprintf(tname_full, "%s/%s", DIR_TEMPLATES, TT[i].name);
+    T = TT[i]; /*shorthand*/
+
+    sprintf(tname_full, "%s/%s", DIR_TEMPLATES, T.name);
     input = fopen(tname_full, "r");
     if(input == NULL)
     {
@@ -149,24 +152,24 @@ void load_templates(template *TT)
       exit(EXIT_FAILURE);
     }
 
-    switch(TT[i].name[0])
+    switch(T.name[0])
     {
       /*two column files*/
       case 'd': /*wd template*/
       case 'D': /*D6 template*/
       case 'G': /*GD492*/
-        for(j=0; j<TT[i].N; ++j)
+        for(j=0; j<T.N; ++j)
         {
-          fscanf(input, "%lf %lf\n", &TT[i].x[j], &TT[i].y[j]);
+          fscanf(input, "%lf %lf\n", &T.x[j], &T.y[j]);
         }
       break;
 
       /*four column files*/
       case 'C': /*CVs*/
       case 'h': /*high quality*/
-        for(j=0; j<TT[i].N; ++j)
+        for(j=0; j<T.N; ++j)
         {
-          fscanf(input, "%lf %lf %lf %lf\n", &TT[i].x[j], &TT[i].y[j], &temp1, &temp2);
+          fscanf(input, "%lf %lf %lf %lf\n", &T.x[j], &T.y[j], &temp1, &temp2);
         }
       break;
 
@@ -289,6 +292,9 @@ void process_pixels(float *data_buffer, unsigned int N_file, spectrum *Sptr)
   unsigned int i, N_sn=0, N=0;
   double x, sigma;
   double sn=0;
+  spectrum S;
+
+  S = (*Sptr); /*Shorthand for most of function*/
 
   /*Loop over sdss spectrum pixels*/
   for(i=0; i<N_file; ++i)
@@ -300,15 +306,15 @@ void process_pixels(float *data_buffer, unsigned int N_file, spectrum *Sptr)
       break;
     if(x > 5560. && x < 5590.) /*bad sky subtraction line in SDSS*/
       continue;
-    (*Sptr).x[N] = x;
-    (*Sptr).y[N] = (double)data_buffer[3*i+1];
+    S.x[N] = x;
+    S.y[N] = (double)data_buffer[3*i+1];
     sigma = (double)data_buffer[3*i+2];
-    (*Sptr).ivar[N] = 1/(sigma*sigma);
+    S.ivar[N] = 1/(sigma*sigma);
 
     /*Also do signal to noise*/
     if(x > 4500. && x < 6000.)
     {
-      sn += (*Sptr).y[N] / sigma;
+      sn += S.y[N] / sigma;
       ++N_sn;
     }
     ++N; /*Count useful pixels (N<=N_file)*/
