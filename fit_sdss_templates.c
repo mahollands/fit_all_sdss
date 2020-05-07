@@ -29,7 +29,8 @@
 #include <omp.h>
 
 //#define N_SDSS 5789198
-#define N_SDSS 100
+//#define N_SDSS 57892
+#define N_SDSS 10000
 #define N_PX_MAX 6000
 #define N_TEMPLATES 3078
 
@@ -244,8 +245,6 @@ void parallel_section(template *TT, FILE *input, FILE *output)
   #pragma omp for schedule(dynamic,1)
   for(ispec=0; ispec<N_SDSS; ++ispec)
   {
-    chisq_min = DBL_MAX;
-
     /* READ SDSS SPECTRUM */
     #pragma omp critical
     {
@@ -264,7 +263,7 @@ void parallel_section(template *TT, FILE *input, FILE *output)
     /****************************************/
     /* MAIN CALCULATION LOOP OVER TEMPLATES */
     /****************************************/
-    for(itmplt=0; itmplt<N_TEMPLATES; ++itmplt)
+    for(chisq_min=DBL_MAX, itmplt=0; itmplt<N_TEMPLATES; ++itmplt)
     {
       interpolate_template(TT[itmplt], S);
       chisq = calc_chisq(S);
@@ -287,14 +286,11 @@ void parallel_section(template *TT, FILE *input, FILE *output)
 }
 
 /*Process the SDSS pixel data and store and store in spectrum type*/
-void process_pixels(float *data_buffer, unsigned int N_file, spectrum *Sptr)
+void process_pixels(float *data_buffer, unsigned int N_file, spectrum *S)
 {
   unsigned int i, N_sn=0, N=0;
   double x, sigma;
   double sn=0;
-  spectrum S;
-
-  S = (*Sptr); /*Shorthand for most of function*/
 
   /*Loop over sdss spectrum pixels*/
   for(i=0; i<N_file; ++i)
@@ -306,23 +302,23 @@ void process_pixels(float *data_buffer, unsigned int N_file, spectrum *Sptr)
       break;
     if(x > 5560. && x < 5590.) /*bad sky subtraction line in SDSS*/
       continue;
-    S.x[N] = x;
-    S.y[N] = (double)data_buffer[3*i+1];
+    S->x[N] = x;
+    S->y[N] = (double)data_buffer[3*i+1];
     sigma = (double)data_buffer[3*i+2];
-    S.ivar[N] = 1/(sigma*sigma);
+    S->ivar[N] = 1/(sigma*sigma);
 
     /*Also do signal to noise*/
     if(x > 4500. && x < 6000.)
     {
-      sn += S.y[N] / sigma;
+      sn += S->y[N] / sigma;
       ++N_sn;
     }
     ++N; /*Count useful pixels (N<=N_file)*/
   }
   sn /= (double)N_sn;
 
-  (*Sptr).sn = sn;
-  (*Sptr).N = N;
+  S->sn = sn;
+  S->N = N;
 }
 
 /*Interpolate a template onto the spectrum axis and store in spectrum*/
@@ -363,4 +359,3 @@ double calc_chisq(spectrum S)
   }
   return chisq;
 }
-
