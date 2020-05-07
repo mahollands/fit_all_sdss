@@ -29,8 +29,8 @@
 #include <omp.h>
 
 //#define N_SDSS 5789198
-//#define N_SDSS 57892
-#define N_SDSS 10000
+#define N_SDSS 578920
+//#define N_SDSS 10000
 #define N_PX_MAX 6000
 #define N_TEMPLATES 3078
 
@@ -68,8 +68,8 @@ void progress_bar(unsigned int n, unsigned int N);
 unsigned int set_N_threads(int argc, char **argv);
 void parallel_section(template *TT, FILE *input, FILE *output);
 void process_pixels(float *data_buffer, unsigned int N_file, spectrum *Sptr);
-void interpolate_template(template T, spectrum S);
-double calc_chisq(spectrum S);
+inline void interpolate_template(template *T, spectrum *S);
+inline double calc_chisq(spectrum *S);
 
 /******************************* End preamble ********************************/
 
@@ -265,8 +265,8 @@ void parallel_section(template *TT, FILE *input, FILE *output)
     /****************************************/
     for(chisq_min=DBL_MAX, itmplt=0; itmplt<N_TEMPLATES; ++itmplt)
     {
-      interpolate_template(TT[itmplt], S);
-      chisq = calc_chisq(S);
+      interpolate_template(&TT[itmplt], &S);
+      chisq = calc_chisq(&S);
 
       if(chisq < chisq_min)
       {
@@ -322,40 +322,40 @@ void process_pixels(float *data_buffer, unsigned int N_file, spectrum *S)
 }
 
 /*Interpolate a template onto the spectrum axis and store in spectrum*/
-void interpolate_template(template T, spectrum S)
+inline void interpolate_template(template *T, spectrum *S)
 {
   unsigned int i, j=1;
 
-  for(i=0; i<S.N; ++i) /*only need to condition the loop on i, since spec stops before template*/
+  for(i=0; i<S->N; ++i) /*only need to condition the loop on i, since spec stops before template*/
   {
-    while(T.x[j] < S.x[i]) ++j;
-    S.Ti[i] = T.y[j-1] + (S.x[i]-T.x[j-1])*(T.y[j]-T.y[j-1])/(T.x[j]-T.x[j-1]);
+    while(T->x[j] < S->x[i]) ++j;
+    S->Ti[i] = T->y[j-1] + (S->x[i]-T->x[j-1])*(T->y[j]-T->y[j-1])/(T->x[j]-T->x[j-1]);
   }
 }
 
 /*Calculate the chisq between the template and interpolated spectrum*/
-double calc_chisq(spectrum S)
+inline double calc_chisq(spectrum *S)
 {
   unsigned int i;
   double Sum_st=0, Sum_tt=0, A, temp, chisq=0;
 
   /* Find optimal scaling parameter*/
   #pragma omp simd private(temp) reduction(+:Sum_tt,Sum_st)
-  for(i=0; i<S.N; ++i)
+  for(i=0; i<S->N; ++i)
   {
-    temp = S.Ti[i] * S.ivar[i];
-    Sum_tt += S.Ti[i] * temp;
-    Sum_st += S.y[i] * temp;
+    temp = S->Ti[i] * S->ivar[i];
+    Sum_tt += S->Ti[i] * temp;
+    Sum_st += S->y[i] * temp;
   }
   /* optimal A */
   A = Sum_st/Sum_tt; 
 
   /*calc chisq with optimal A*/
   #pragma omp simd private(temp) reduction(+:chisq)
-  for(i=0; i<S.N; ++i)
+  for(i=0; i<S->N; ++i)
   {
-    temp = S.y[i] - A*S.Ti[i];
-    chisq += temp * temp * S.ivar[i];
+    temp = S->y[i] - A*S->Ti[i];
+    chisq += temp * temp * S->ivar[i];
   }
   return chisq;
 }
