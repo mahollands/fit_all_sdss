@@ -29,8 +29,8 @@
 #include <omp.h>
 
 //#define N_SDSS 5789198
-#define N_SDSS 578920
-//#define N_SDSS 10000
+//#define N_SDSS 578920
+#define N_SDSS 1000
 #define N_PX_MAX 6000
 #define N_TEMPLATES 3078
 
@@ -117,7 +117,6 @@ int main(int argc, char** argv)
 void load_templates(template *TT)
 {
   unsigned int i, j;
-  double temp1, temp2;
   FILE *input;
   char tname_full[128];
   template T;
@@ -140,7 +139,7 @@ void load_templates(template *TT)
   fclose(input);
 
   /*Read template files in parallel*/
-  #pragma omp parallel for default(shared) private(i,j,input,tname_full,temp1,temp2,T)
+  #pragma omp parallel for default(shared) private(i,j,input,tname_full,T)
   for(i=0; i<N_TEMPLATES; ++i)
   {
     T = TT[i]; /*shorthand*/
@@ -170,7 +169,7 @@ void load_templates(template *TT)
       case 'h': /*high quality*/
         for(j=0; j<T.N; ++j)
         {
-          fscanf(input, "%lf %lf %lf %lf\n", &T.x[j], &T.y[j], &temp1, &temp2);
+          fscanf(input, "%lf %lf %*lf %*lf\n", &T.x[j], &T.y[j]);
         }
       break;
 
