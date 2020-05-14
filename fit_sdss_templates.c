@@ -29,8 +29,8 @@
 #include <omp.h>
 
 //#define N_SDSS 5789198
-#define N_SDSS 578920
-//#define N_SDSS 10000
+//#define N_SDSS 578920
+#define N_SDSS 1000
 #define N_PX_MAX 6000
 #define N_TEMPLATES 3078
 
