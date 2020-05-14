@@ -152,30 +152,10 @@ void load_templates(template *TT)
       exit(EXIT_FAILURE);
     }
 
-    switch(T.name[0])
+    /*Read first two columns from template file*/
+    for(j=0; j<T.N; ++j)
     {
-      /*two column files*/
-      case 'd': /*wd template*/
-      case 'D': /*D6 template*/
-      case 'G': /*GD492*/
-        for(j=0; j<T.N; ++j)
-        {
-          fscanf(input, "%lf %lf\n", &T.x[j], &T.y[j]);
-        }
-      break;
-
-      /*four column files*/
-      case 'C': /*CVs*/
-      case 'h': /*high quality*/
-        for(j=0; j<T.N; ++j)
-        {
-          fscanf(input, "%lf %lf %*lf %*lf\n", &T.x[j], &T.y[j]);
-        }
-      break;
-
-      default:
-        puts("Problem with template names");
-        exit(EXIT_FAILURE);
+      fscanf(input, "%lf %lf%*[^\n]\n", &T.x[j], &T.y[j]);
     }
     fclose(input);
   }
