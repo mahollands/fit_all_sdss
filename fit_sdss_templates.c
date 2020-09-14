@@ -64,6 +64,8 @@ typedef struct {
 
 /*Function Prototypes*/
 void load_templates(template *TT);
+void load_templates_names_lengths(template *TT);
+void load_template_data(template T);
 void progress_bar(unsigned int n, unsigned int N);
 unsigned int set_N_threads(int argc, char **argv);
 void parallel_section(template *TT, FILE *input, FILE *output);
@@ -112,12 +114,21 @@ int main(int argc, char** argv)
 /*Loads all templates into an array of templates*/
 void load_templates(template *TT)
 {
-    unsigned int i, j;
-    FILE *input;
-    char tname_full[128];
-    template T;
+    unsigned int i;
 
-    /*Read template list and memory allocation in serial*/
+    puts("loading templates");
+    load_templates_names_lengths(TT);
+    #pragma omp parallel for default(shared) private(i)
+    for(i=0; i<N_TEMPLATES; ++i)
+        load_template_data(TT[i]);
+    puts("loaded templates into memory");
+}
+
+void load_templates_names_lengths(template *TT)
+{
+    unsigned int i;
+    FILE *input;
+
     input = fopen(F_TEMPLATE_LIST, "r");
     if(input == NULL) {
         printf("Error opening %s\n", F_TEMPLATE_LIST);
@@ -129,31 +140,26 @@ void load_templates(template *TT)
         TT[i].y = (double*)malloc(TT[i].N*sizeof(double));
     }
     fclose(input);
+}
 
-    puts("loading templates");
+void load_template_data(template T)
+{
+    unsigned int i;
+    FILE *input;
+    char tname_full[128];
 
-    /*Read template files in parallel*/
-    #pragma omp parallel for default(shared) private(i,j,input,tname_full,T)
-    for(i=0; i<N_TEMPLATES; ++i) {
-        T = TT[i]; /*shorthand*/
-
-        sprintf(tname_full, "%s/%s", DIR_TEMPLATES, T.name);
-        input = fopen(tname_full, "r");
-        if(input == NULL) {
-            printf("Error opening %s\n", tname_full);
-            exit(EXIT_FAILURE);
-        }
-
-        /*Read first two columns from template file*/
-        for(j=0; j<T.N; ++j) {
-            fscanf(input, "%lf %lf%*[^\n]\n", &T.x[j], &T.y[j]);
-        }
-        fclose(input);
+    sprintf(tname_full, "%s/%s", DIR_TEMPLATES, T.name);
+    input = fopen(tname_full, "r");
+    if(input == NULL) {
+        printf("Error opening %s\n", tname_full);
+        exit(EXIT_FAILURE);
     }
-    for(i=0; i<5; i++) {
-        printf("%s %f %f\n", TT[i].x, TT[i].y);
+
+    /*Read first two columns from template file*/
+    for(i=0; i<T.N; ++i) {
+        fscanf(input, "%lf %lf%*[^\n]\n", &T.x[i], &T.y[i]);
     }
-    puts("loaded templates into memory");
+    fclose(input);
 }
 
 /*Prints a progress bar to screen*/
