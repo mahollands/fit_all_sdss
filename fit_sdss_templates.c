@@ -119,8 +119,11 @@ void load_templates(template *TT)
     puts("loading templates");
     load_templates_names_lengths(TT);
     #pragma omp parallel for default(shared) private(i)
-    for(i=0; i<N_TEMPLATES; ++i)
+    for(i=0; i<N_TEMPLATES; ++i) {
+        TT[i].x = (double*)malloc(TT[i].N*sizeof(double));
+        TT[i].y = (double*)malloc(TT[i].N*sizeof(double));
         load_template_data(TT[i]);
+    }
     puts("loaded templates into memory");
 }
 
@@ -134,11 +137,8 @@ void load_templates_names_lengths(template *TT)
         printf("Error opening %s\n", F_TEMPLATE_LIST);
         exit(EXIT_FAILURE);
     }
-    for(i=0; i<N_TEMPLATES; ++i) {
+    for(i=0; i<N_TEMPLATES; ++i)
         fscanf(input, "%s %d\n", TT[i].name, &TT[i].N);
-        TT[i].x = (double*)malloc(TT[i].N*sizeof(double));
-        TT[i].y = (double*)malloc(TT[i].N*sizeof(double));
-    }
     fclose(input);
 }
 
@@ -200,20 +200,22 @@ unsigned int set_N_threads(int argc, char **argv)
 /*Function that loops over SDSS spectra and runs in parallel*/
 void parallel_section(template *TT, FILE *input, FILE *output)
 {
-    spectrum S;
     unsigned int ispec, itmplt, imin=0;
-    unsigned int N_file;
+    unsigned int intbuffer[4], *N_file, *plate, *mjd, *fiber;
     float data_buffer[3*N_PX_MAX];
-    unsigned int intbuffer[4];
-    double chisq, chisq_min, chisq_min_red;
-    unsigned int plate, mjd, fiber;
+    double chisq, chisq_min;
+    spectrum S;
     double spec_mem[4*N_PX_MAX];
 
-    /*Asign memory for spectrum*/
+    /*Assign memory for spectrum*/
     S.x    = spec_mem;
     S.y    = spec_mem +   N_PX_MAX;
     S.ivar = spec_mem + 2*N_PX_MAX;
     S.Ti   = spec_mem + 3*N_PX_MAX;
+    N_file = intbuffer;
+    plate = intbuffer + 1;
+    mjd   = intbuffer + 2;
+    fiber = intbuffer + 3;
 
     /*start parallel for loop. (dynamic,1) is fastest, as each thread works on
     one file at a time, and progress bar usually updates correctly*/
@@ -223,15 +225,9 @@ void parallel_section(template *TT, FILE *input, FILE *output)
         #pragma omp critical
         {
             fread(intbuffer, sizeof(unsigned int), 4, input);
-            N_file = intbuffer[0];
-            fread(data_buffer, sizeof(float), 3*N_file, input);
+            fread(data_buffer, sizeof(float), 3*(*N_file), input);
         }
-        plate = intbuffer[1];
-        mjd   = intbuffer[2];
-        fiber = intbuffer[3];
-
-        /*process buffered pixel data and calculate S/N; ignore noisy or broken spectra*/
-        process_pixels(data_buffer, N_file, &S);
+        process_pixels(data_buffer, (*N_file), &S);
         if(S.sn < SN_CUT || isnan(S.sn) || S.N < 1000)
             continue; 
 
@@ -248,9 +244,10 @@ void parallel_section(template *TT, FILE *input, FILE *output)
             }
         }
 
-        chisq_min_red = chisq_min / (double)(S.N-1);
         /*output to file*/
-        fprintf(output, "%05d-%05d-%04d,%s,%.3e,%.3e\n", plate, mjd, fiber, TT[imin].name, chisq_min_red, S.sn);
+        fprintf(output, "%05d-%05d-%04d,%s,%.3e,%.3e\n",
+        (*plate), (*mjd), (*fiber),
+        TT[imin].name, chisq_min / (double)(S.N-1), S.sn);
 
         /*progress bar*/
         if(ispec % 100 == 0)
@@ -268,10 +265,10 @@ void process_pixels(float *data_buffer, unsigned int N_file, spectrum *S)
     /*Loop over sdss spectrum pixels*/
     for(i=0; i<N_file; ++i) {
         x = (double)data_buffer[3*i];
-        if(x<X_MIN) /*make sure we only load data covered by the templates*/
-            continue;
-        else if(x>X_MAX)
+        if(x>X_MAX) /*make sure we only load data covered by the templates*/
             break;
+        if(x<X_MIN)
+            continue;
         if(x > 5560. && x < 5590.) /*bad sky subtraction line in SDSS*/
             continue;
         S->x[N] = x;
@@ -308,14 +305,14 @@ void interpolate_template(template T, spectrum S)
 double calc_chisq(spectrum S)
 {
     unsigned int i;
-    double Sum_st=0, Sum_tt=0, A, temp, chisq=0;
+    double Sum_st=0, Sum_tt=0, A, tmp, chisq=0;
 
     /* Find optimal scaling parameter*/
     #pragma omp simd private(temp) reduction(+:Sum_tt,Sum_st)
     for(i=0; i<S.N; ++i) {
-        temp = S.Ti[i] * S.ivar[i];
-        Sum_tt += S.Ti[i] * temp;
-        Sum_st += S.y[i] * temp;
+        tmp = S.Ti[i] * S.ivar[i];
+        Sum_tt += S.Ti[i] * tmp;
+        Sum_st += S.y[i] * tmp;
     }
     /* optimal A */
     A = Sum_st/Sum_tt; 
@@ -323,8 +320,8 @@ double calc_chisq(spectrum S)
     /*calc chisq with optimal A*/
     #pragma omp simd private(temp) reduction(+:chisq)
     for(i=0; i<S.N; ++i) {
-        temp = S.y[i] - A*S.Ti[i];
-        chisq += temp * temp * S.ivar[i];
+        tmp = S.y[i] - A*S.Ti[i];
+        chisq += tmp * tmp * S.ivar[i];
     }
     return chisq;
 }
