@@ -46,14 +46,14 @@
 #define F_OUT       "../output_data/test_output.csv"
 
 /*data structures for SDSS spectra and templates*/
-typedef struct{
+typedef struct {
   unsigned int N;
   char name[32];
   double *x;
   double *y;
 }template;
 
-typedef struct{
+typedef struct {
   unsigned int N;
   double sn;
   double *x;
@@ -102,8 +102,7 @@ int main(int argc, char** argv)
   printf("\ntime to complete = %.3f s\n", toc-tic);
 
   /*tidy up before program end*/
-  for(i=0; i<N_TEMPLATES; ++i)
-  {
+  for(i=0; i<N_TEMPLATES; ++i) {
     free(TT[i].x);
     free(TT[i].y);
   }
@@ -125,13 +124,11 @@ void load_templates(template *TT)
 
   /*Read template list and memory allocation in serial*/
   input = fopen(F_TEMPLATE_LIST, "r");
-  if(input == NULL)
-  {
+  if(input == NULL) {
     printf("Error opening %s\n", F_TEMPLATE_LIST);
     exit(EXIT_FAILURE);
   }
-  for(i=0; i<N_TEMPLATES; ++i)
-  {
+  for(i=0; i<N_TEMPLATES; ++i) {
     fscanf(input, "%s %d\n", TT[i].name, &TT[i].N);
     TT[i].x = (double*)malloc(TT[i].N*sizeof(double));
     TT[i].y = (double*)malloc(TT[i].N*sizeof(double));
@@ -140,26 +137,23 @@ void load_templates(template *TT)
 
   /*Read template files in parallel*/
   #pragma omp parallel for default(shared) private(i,j,input,tname_full,T)
-  for(i=0; i<N_TEMPLATES; ++i)
-  {
+  for(i=0; i<N_TEMPLATES; ++i) {
     T = TT[i]; /*shorthand*/
 
     sprintf(tname_full, "%s/%s", DIR_TEMPLATES, T.name);
     input = fopen(tname_full, "r");
-    if(input == NULL)
-    {
+    if(input == NULL) {
       printf("Error opening %s\n", tname_full);
       exit(EXIT_FAILURE);
     }
 
     /*Read first two columns from template file*/
-    for(j=0; j<T.N; ++j)
-    {
+    for(j=0; j<T.N; ++j) {
       fscanf(input, "%lf %lf%*[^\n]\n", &T.x[j], &T.y[j]);
     }
     fclose(input);
   }
-  for(i=0; i<5; i++){
+  for(i=0; i<5; i++) {
     printf("%s %f %f\n", TT[i].x, TT[i].y);
   }
   puts("loaded templates into memory");
@@ -191,12 +185,9 @@ unsigned int set_N_threads(int argc, char **argv)
 {
   unsigned int Nthreads;
 
-  if(argc == 1)
-  {
+  if(argc == 1) {
     Nthreads = omp_get_max_threads();
-  }
-  else
-  {
+  } else {
     sscanf(argv[1], "%d", &Nthreads);
     omp_set_num_threads(Nthreads);
   }
@@ -225,8 +216,7 @@ void parallel_section(template *TT, FILE *input, FILE *output)
   /*start parallel for loop. (dynamic,1) is fastest, as each thread works on
   one file at a time, and progress bar usually updates correctly*/
   #pragma omp for schedule(dynamic,1)
-  for(ispec=0; ispec<N_SDSS; ++ispec)
-  {
+  for(ispec=0; ispec<N_SDSS; ++ispec) {
     /* READ SDSS SPECTRUM */
     #pragma omp critical
     {
@@ -245,13 +235,11 @@ void parallel_section(template *TT, FILE *input, FILE *output)
     /****************************************/
     /* MAIN CALCULATION LOOP OVER TEMPLATES */
     /****************************************/
-    for(chisq_min=DBL_MAX, itmplt=0; itmplt<N_TEMPLATES; ++itmplt)
-    {
+    for(chisq_min=DBL_MAX, itmplt=0; itmplt<N_TEMPLATES; ++itmplt) {
       interpolate_template(TT[itmplt], S);
       chisq = calc_chisq(S);
 
-      if(chisq < chisq_min)
-      {
+      if(chisq < chisq_min) {
         chisq_min = chisq; 
         imin = itmplt;
       }
@@ -275,8 +263,7 @@ void process_pixels(float *data_buffer, unsigned int N_file, spectrum *S)
   double sn=0;
 
   /*Loop over sdss spectrum pixels*/
-  for(i=0; i<N_file; ++i)
-  {
+  for(i=0; i<N_file; ++i) {
     x = (double)data_buffer[3*i];
     if(x<X_MIN) /*make sure we only load data covered by the templates*/
       continue;
@@ -290,8 +277,7 @@ void process_pixels(float *data_buffer, unsigned int N_file, spectrum *S)
     S->ivar[N] = 1/(sigma*sigma);
 
     /*Also do signal to noise*/
-    if(x > 4500. && x < 6000.)
-    {
+    if(x > 4500. && x < 6000.) {
       sn += S->y[N] / sigma;
       ++N_sn;
     }
@@ -308,8 +294,7 @@ void interpolate_template(template T, spectrum S)
 {
   unsigned int i, j=1;
 
-  for(i=0; i<S.N; ++i) /*only need to condition the loop on i, since spec stops before template*/
-  {
+  for(i=0; i<S.N; ++i) { /*only need to condition the loop on i, since spec stops before template*/
     while(T.x[j] < S.x[i]) ++j;
     S.Ti[i] = T.y[j-1] + (S.x[i]-T.x[j-1])*(T.y[j]-T.y[j-1])/(T.x[j]-T.x[j-1]);
   }
@@ -323,8 +308,7 @@ double calc_chisq(spectrum S)
 
   /* Find optimal scaling parameter*/
   #pragma omp simd private(temp) reduction(+:Sum_tt,Sum_st)
-  for(i=0; i<S.N; ++i)
-  {
+  for(i=0; i<S.N; ++i) {
     temp = S.Ti[i] * S.ivar[i];
     Sum_tt += S.Ti[i] * temp;
     Sum_st += S.y[i] * temp;
@@ -334,8 +318,7 @@ double calc_chisq(spectrum S)
 
   /*calc chisq with optimal A*/
   #pragma omp simd private(temp) reduction(+:chisq)
-  for(i=0; i<S.N; ++i)
-  {
+  for(i=0; i<S.N; ++i) {
     temp = S.y[i] - A*S.Ti[i];
     chisq += temp * temp * S.ivar[i];
   }
