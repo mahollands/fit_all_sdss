@@ -62,6 +62,11 @@ typedef struct {
     double *Ti; /*Interpolated template fluxes*/
 }spectrum;
 
+struct result{
+    unsigned int imin;
+    double chisq_min_red;
+};
+
 /*Function Prototypes*/
 void load_templates(template *TT);
 void load_templates_names_lengths(template *TT);
@@ -69,6 +74,7 @@ void load_template_data(template T);
 void progress_bar(unsigned int n, unsigned int N);
 unsigned int set_N_threads(int argc, char **argv);
 void process_sdss_spectra(template *TT, FILE *input, FILE *output);
+struct result process_sdss_spectrum(template *TT, spectrum S);
 void process_pixel_data(float *data_buffer, unsigned int N_file, spectrum *Sptr);
 void interpolate_template(template T, spectrum S);
 double calc_chisq(spectrum S);
@@ -197,15 +203,15 @@ unsigned int set_N_threads(int argc, char **argv)
     return Nthreads;
 }
 
-/*Function that loops over SDSS spectra and runs in parallel*/
+/*Loop over SDSS spectra and runs in parallel*/
 void process_sdss_spectra(template *TT, FILE *input, FILE *output)
 {
-    unsigned int ispec, itmplt, imin=0;
+    unsigned int ispec;
     unsigned int intbuffer[4], *N_file, *plate, *mjd, *fiber;
     float data_buffer[3*N_PX_MAX];
-    double chisq, chisq_min;
     spectrum S;
     double spec_mem[4*N_PX_MAX];
+    struct result r;
 
     /*Assign memory for spectrum*/
     S.x    = spec_mem;
@@ -232,25 +238,37 @@ void process_sdss_spectra(template *TT, FILE *input, FILE *output)
             continue; 
 
         /* Loop over templates */
-        for(chisq_min=DBL_MAX, itmplt=0; itmplt<N_TEMPLATES; ++itmplt) {
-            interpolate_template(TT[itmplt], S);
-            chisq = calc_chisq(S);
-
-            if(chisq < chisq_min) {
-                chisq_min = chisq; 
-                imin = itmplt;
-            }
-        }
+        r = process_sdss_spectrum(TT, S);
 
         /*output to file*/
         fprintf(output, "%05d-%05d-%04d,%s,%.3e,%.3e\n",
         (*plate), (*mjd), (*fiber),
-        TT[imin].name, chisq_min / (double)(S.N-1), S.sn);
+        TT[r.imin].name, r.chisq_min_red, S.sn);
 
         /*progress bar*/
         if(ispec % 100 == 0)
             progress_bar(ispec, N_SDSS);
     }
+}
+
+/*Loop over templates for a single spectrum, finding lowest chisq*/
+struct result process_sdss_spectrum(template *TT, spectrum S)
+{
+    unsigned int i;
+    double chisq, chisq_min;
+    struct result r;
+
+    for(chisq_min=DBL_MAX, i=0; i<N_TEMPLATES; ++i) {
+        interpolate_template(TT[i], S);
+        chisq = calc_chisq(S);
+
+        if(chisq < chisq_min) {
+            chisq_min = chisq; 
+            r.imin = i;
+        }
+    }
+    r.chisq_min_red = chisq_min / (double)(S.N-1);
+    return r;
 }
 
 /*Process the SDSS pixel data and store and store in spectrum type*/
