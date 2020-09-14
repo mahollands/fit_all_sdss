@@ -1,25 +1,21 @@
-/**********************************************************/
-/* This program fits templates to all SDSS spectra.       */
-/* For each SDSS spectrum, firstly the S/N is calculated. */
-/* Then for each template, the they are interpolated onto */
-/* the same wavelength axis as the SDSS spectrum.         */
-/* These are optimally fitted to the SDSS spectrum.       */
-/* The template with the minimum chi2 is the winner.      */
-/* The loop over files uses all available CPU cores.      */
-/* The SDSS name, best template, chisq and S/N are        */
-/* finally written to disk.                               */
-/*                                                        */
-/* Compile with:                                          */
-/*                                                        */
-/* gcc -o outname dzFinder2.c -O3 -fopenmp -march=native  */
-/*                                                        */
-/* OR                                                     */
-/*                                                        */
-/* module load intel/2019.3.199-GCC-8.3.0-2.32            */
-/* icc -o outname fit_sdss_templates.c -qopenmp -xhost    */
-/*                                                        */
-/* Last update 2020-05-02                                 */
-/**********************************************************/
+/* This program fits templates to all SDSS spectra. For each SDSS spectrum,
+ * firstly the S/N is calculated. Then for each template, the they are
+ * interpolated onto the same wavelength axis as the SDSS spectrum. These are
+ * optimally fitted to the SDSS spectrum. The template with the minimum chi2
+ * is the winner. The loop over files uses all available CPU cores. The SDSS
+ * name, best template, chisq and S/N are finally written to disk.          
+ *                                                                            
+ * Compile with:                                                              
+ *                                                                            
+ * gcc -o outname fit_sdss_templates.c -O3 -lm -fopenmp -march=native         
+ *                                                                            
+ * OR                                                                         
+ *                                                                            
+ * module load intel/2019.3.199-GCC-8.3.0-2.32                                
+ * icc -o outname fit_sdss_templates.c -qopenmp -xhost                        
+ *                                                                            
+ * Last update 2020-09-14                                                     
+ *****************************************************************************/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -203,7 +199,7 @@ unsigned int set_N_threads(int argc, char **argv)
     return Nthreads;
 }
 
-/*Loop over SDSS spectra and runs in parallel*/
+/*Loop over SDSS spectra and running in parallel*/
 void process_sdss_spectra(template *TT, FILE *input, FILE *output)
 {
     unsigned int ispec;
@@ -324,7 +320,7 @@ double calc_chisq(spectrum S)
     double Sum_st=0, Sum_tt=0, A, tmp, chisq=0;
 
     /* Find optimal scaling parameter*/
-    #pragma omp simd private(temp) reduction(+:Sum_tt,Sum_st)
+    #pragma omp simd private(tmp) reduction(+:Sum_tt,Sum_st)
     for(i=0; i<S.N; ++i) {
         tmp = S.Ti[i] * S.ivar[i];
         Sum_tt += S.Ti[i] * tmp;
@@ -334,7 +330,7 @@ double calc_chisq(spectrum S)
     A = Sum_st/Sum_tt; 
 
     /*calc chisq with optimal A*/
-    #pragma omp simd private(temp) reduction(+:chisq)
+    #pragma omp simd private(tmp) reduction(+:chisq)
     for(i=0; i<S.N; ++i) {
         tmp = S.y[i] - A*S.Ti[i];
         chisq += tmp * tmp * S.ivar[i];
