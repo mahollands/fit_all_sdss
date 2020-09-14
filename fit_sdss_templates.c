@@ -68,8 +68,8 @@ void load_templates_names_lengths(template *TT);
 void load_template_data(template T);
 void progress_bar(unsigned int n, unsigned int N);
 unsigned int set_N_threads(int argc, char **argv);
-void parallel_section(template *TT, FILE *input, FILE *output);
-void process_pixels(float *data_buffer, unsigned int N_file, spectrum *Sptr);
+void process_sdss_spectra(template *TT, FILE *input, FILE *output);
+void process_pixel_data(float *data_buffer, unsigned int N_file, spectrum *Sptr);
 void interpolate_template(template T, spectrum S);
 double calc_chisq(spectrum S);
 
@@ -95,7 +95,7 @@ int main(int argc, char** argv)
     puts("starting");
     tic = omp_get_wtime();
     #pragma omp parallel default(shared)
-    parallel_section(TT, input, output);
+    process_sdss_spectra(TT, input, output);
     progress_bar(N_SDSS, N_SDSS);
     toc = omp_get_wtime();
     printf("\ntime to complete = %.3f s\n", toc-tic);
@@ -198,7 +198,7 @@ unsigned int set_N_threads(int argc, char **argv)
 }
 
 /*Function that loops over SDSS spectra and runs in parallel*/
-void parallel_section(template *TT, FILE *input, FILE *output)
+void process_sdss_spectra(template *TT, FILE *input, FILE *output)
 {
     unsigned int ispec, itmplt, imin=0;
     unsigned int intbuffer[4], *N_file, *plate, *mjd, *fiber;
@@ -227,13 +227,11 @@ void parallel_section(template *TT, FILE *input, FILE *output)
             fread(intbuffer, sizeof(unsigned int), 4, input);
             fread(data_buffer, sizeof(float), 3*(*N_file), input);
         }
-        process_pixels(data_buffer, (*N_file), &S);
+        process_pixel_data(data_buffer, (*N_file), &S);
         if(S.sn < SN_CUT || isnan(S.sn) || S.N < 1000)
             continue; 
 
-        /****************************************/
-        /* MAIN CALCULATION LOOP OVER TEMPLATES */
-        /****************************************/
+        /* Loop over templates */
         for(chisq_min=DBL_MAX, itmplt=0; itmplt<N_TEMPLATES; ++itmplt) {
             interpolate_template(TT[itmplt], S);
             chisq = calc_chisq(S);
@@ -256,7 +254,7 @@ void parallel_section(template *TT, FILE *input, FILE *output)
 }
 
 /*Process the SDSS pixel data and store and store in spectrum type*/
-void process_pixels(float *data_buffer, unsigned int N_file, spectrum *S)
+void process_pixel_data(float *data_buffer, unsigned int N_file, spectrum *S)
 {
     unsigned int i, N_sn=0, N=0;
     double x, sigma;
