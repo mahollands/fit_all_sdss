@@ -80,10 +80,7 @@ int main(int argc, char** argv)
     double tic, toc;
     unsigned int i;
   
-    /*Count how many threads we're using if user supplied*/
-    set_N_threads(argc, argv);
-  
-    /*Load templates and list of SDSS file names*/
+    set_N_threads(argc, argv); /*Set thread count if user supplied*/
     load_templates(TT);
   
     /*ready file I/O file*/
@@ -109,7 +106,7 @@ int main(int argc, char** argv)
     fclose(input);
     fclose(output);
   
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 /*Loads all templates into an array of templates*/
@@ -119,8 +116,6 @@ void load_templates(template *TT)
     FILE *input;
     char tname_full[128];
     template T;
-
-    puts("loading templates");
 
     /*Read template list and memory allocation in serial*/
     input = fopen(F_TEMPLATE_LIST, "r");
@@ -134,6 +129,8 @@ void load_templates(template *TT)
         TT[i].y = (double*)malloc(TT[i].N*sizeof(double));
     }
     fclose(input);
+
+    puts("loading templates");
 
     /*Read template files in parallel*/
     #pragma omp parallel for default(shared) private(i,j,input,tname_full,T)
@@ -229,7 +226,8 @@ void parallel_section(template *TT, FILE *input, FILE *output)
 
         /*process buffered pixel data and calculate S/N; ignore noisy or broken spectra*/
         process_pixels(data_buffer, N_file, &S);
-        if(S.sn < SN_CUT || isnan(S.sn) || S.N < 1000) continue; 
+        if(S.sn < SN_CUT || isnan(S.sn) || S.N < 1000)
+            continue; 
 
         /****************************************/
         /* MAIN CALCULATION LOOP OVER TEMPLATES */
@@ -250,7 +248,7 @@ void parallel_section(template *TT, FILE *input, FILE *output)
 
         /*progress bar*/
         if(ispec % 100 == 0)
-          progress_bar(ispec, N_SDSS);
+            progress_bar(ispec, N_SDSS);
     }
 }
 
@@ -294,7 +292,8 @@ void interpolate_template(template T, spectrum S)
   unsigned int i, j=1;
 
   for(i=0; i<S.N; ++i) { /*only need to condition the loop on i, since spec stops before template*/
-      while(T.x[j] < S.x[i]) ++j;
+      while(T.x[j] < S.x[i])
+          ++j;
       S.Ti[i] = T.y[j-1] + (S.x[i]-T.x[j-1])*(T.y[j]-T.y[j-1])/(T.x[j]-T.x[j-1]);
   }
 }
