@@ -249,10 +249,10 @@ void process_sdss_spectra(struct template *Tlist, FILE *input, FILE *output)
 struct result find_best_template(struct spectrum S, struct template *Tlist)
 {
     unsigned int i;
-    double chi2;
+    double chi2=DBL_MAX;
     struct result r;
 
-    for(chi2_min=DBL_MAX, i=0; i<N_TEMPLATES; i++) {
+    for(i=0; i<N_TEMPLATES; i++) {
         interpolate_template(Tlist[i], S);
         chi2 = calc_chi2(S);
 
