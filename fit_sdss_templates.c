@@ -103,7 +103,7 @@ int main(int argc, char** argv)
     printf("\ntime to complete = %.3f s\n", toc-tic);
   
     /*tidy up before program end*/
-    for(i=0; i<N_TEMPLATES; ++i) {
+    for(i=0; i<N_TEMPLATES; i++) {
         free(TT[i].x);
         free(TT[i].y);
     }
@@ -121,7 +121,7 @@ void load_templates(template *TT)
     puts("loading templates");
     load_templates_names_lengths(TT);
     #pragma omp parallel for default(shared) private(i)
-    for(i=0; i<N_TEMPLATES; ++i) {
+    for(i=0; i<N_TEMPLATES; i++) {
         TT[i].x = (double*)malloc(TT[i].n*sizeof(double));
         TT[i].y = (double*)malloc(TT[i].n*sizeof(double));
         load_template_data(TT[i]);
@@ -139,7 +139,7 @@ void load_templates_names_lengths(template *TT)
         printf("Error opening %s\n", F_TEMPLATE_LIST);
         exit(EXIT_FAILURE);
     }
-    for(i=0; i<N_TEMPLATES; ++i)
+    for(i=0; i<N_TEMPLATES; i++)
         fscanf(input, "%s %d\n", TT[i].name, &TT[i].n);
     fclose(input);
 }
@@ -158,7 +158,7 @@ void load_template_data(template T)
     }
 
     /*Read first two columns from template file*/
-    for(i=0; i<T.n; ++i) {
+    for(i=0; i<T.n; i++) {
         fscanf(input, "%lf %lf%*[^\n]\n", &T.x[i], &T.y[i]);
     }
     fclose(input);
@@ -176,9 +176,9 @@ void progress_bar(unsigned int n, unsigned int N)
 
     printf("\rspectra processed: %7d/%d ", n, N);
     putchar('|');
-    for(i=0; i<n1; ++i)
+    for(i=0; i<n1; i++)
         putchar('*');
-    for(i=0; i<n2; ++i)
+    for(i=0; i<n2; i++)
         putchar('-');
     putchar('|');
     fflush(stdout);
@@ -222,7 +222,7 @@ void process_sdss_spectra(template *TT, FILE *input, FILE *output)
     /*start parallel for loop. (dynamic,1) is fastest, as each thread works on
     one file at a time, and progress bar usually updates correctly*/
     #pragma omp for schedule(dynamic,1)
-    for(ispec=0; ispec<N_SDSS; ++ispec) {
+    for(ispec=0; ispec<N_SDSS; ispec++) {
         /* READ SDSS SPECTRUM */
         #pragma omp critical
         {
@@ -254,7 +254,7 @@ struct result process_sdss_spectrum(template *TT, spectrum S)
     double chisq, chisq_min;
     struct result r;
 
-    for(chisq_min=DBL_MAX, i=0; i<N_TEMPLATES; ++i) {
+    for(chisq_min=DBL_MAX, i=0; i<N_TEMPLATES; i++) {
         interpolate_template(TT[i], S);
         chisq = calc_chisq(S);
 
@@ -275,7 +275,7 @@ void process_pixel_data(float *data_buffer, unsigned int n_file, spectrum *S)
     double sn=0;
 
     /*Loop over sdss spectrum pixels*/
-    for(i=0; i<n_file; ++i) {
+    for(i=0; i<n_file; i++) {
         x = (double)data_buffer[3*i];
         if(x>X_MAX) /*make sure we only load data covered by the templates*/
             break;
@@ -291,9 +291,9 @@ void process_pixel_data(float *data_buffer, unsigned int n_file, spectrum *S)
         /*Also do signal to noise*/
         if(x > 4500. && x < 6000.) {
             sn += S->y[n] / sigma;
-            ++n_sn;
+            n_sn++;
         }
-        ++n; /*Count useful pixels (N<=N_file)*/
+        n++; /*Count useful pixels (N<=N_file)*/
     }
     sn /= (double)n_sn;
 
@@ -306,9 +306,9 @@ void interpolate_template(template T, spectrum S)
 {
   unsigned int i, j=1;
 
-  for(i=0; i<S.n; ++i) { /*only need to condition the loop on i, since spec stops before template*/
+  for(i=0; i<S.n; i++) { /*only need to condition the loop on i, since spec stops before template*/
       while(T.x[j] < S.x[i])
-          ++j;
+          j++;
       S.Ti[i] = T.y[j-1] + (S.x[i]-T.x[j-1])*(T.y[j]-T.y[j-1])/(T.x[j]-T.x[j-1]);
   }
 }
@@ -321,7 +321,7 @@ double calc_chisq(spectrum S)
 
     /* Find optimal scaling parameter*/
     #pragma omp simd private(tmp) reduction(+:Sum_tt,Sum_st)
-    for(i=0; i<S.n; ++i) {
+    for(i=0; i<S.n; i++) {
         tmp = S.Ti[i] * S.ivar[i];
         Sum_tt += S.Ti[i] * tmp;
         Sum_st += S.y[i] * tmp;
@@ -331,7 +331,7 @@ double calc_chisq(spectrum S)
 
     /*calc chisq with optimal A*/
     #pragma omp simd private(tmp) reduction(+:chisq)
-    for(i=0; i<S.n; ++i) {
+    for(i=0; i<S.n; i++) {
         tmp = S.y[i] - A*S.Ti[i];
         chisq += tmp * tmp * S.ivar[i];
     }
