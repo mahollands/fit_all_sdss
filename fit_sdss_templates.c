@@ -25,7 +25,7 @@
 
 //#define N_SDSS 5789198
 //#define N_SDSS 578920
-#define N_SDSS 10000
+#define N_SDSS 1000
 #define N_PX_MAX 6000
 #define N_TEMPLATES 4187
 
@@ -59,7 +59,7 @@ struct spectrum{
 
 struct result{
     unsigned int imin;
-    double chi2_min;
+    double chi2r_min;
 };
 
 /*Function Prototypes*/
@@ -72,7 +72,7 @@ void process_sdss_spectra(struct template *Tlist, FILE *input, FILE *output);
 struct result find_best_template(struct spectrum S, struct template *Tlist);
 void process_pixel_data(float *data_buf, unsigned int n_file, struct spectrum *Sptr);
 void interpolate_template(struct template T, struct spectrum S);
-double calc_chi2(struct spectrum S);
+double calc_chi2(struct spectrum S, struct template T);
 
 /******************************* End preamble ********************************/
 
@@ -83,12 +83,11 @@ int main(int argc, char** argv)
     double tic, toc;
     unsigned int i;
   
-    set_n_threads(argc, argv); /*Set thread count if user supplied*/
-    load_templates(Tlist);
-  
-    /*ready file I/O file*/
+    /*setup before calculation loop*/
+    set_n_threads(argc, argv);
     input = fopen(F_IN, "rb");
     output = fopen(F_OUT, "w");
+    load_templates(Tlist);
   
     /***************************/
     /*loop through SDSS spectra*/
@@ -237,7 +236,7 @@ void process_sdss_spectra(struct template *Tlist, FILE *input, FILE *output)
 
         /*output to file*/
         fprintf(output, "%05d-%05d-%04d,%s,%.3e,%.3e\n",
-        (*plate), (*mjd), (*fiber), Tlist[r.imin].name, r.chi2_min, S.sn);
+        (*plate), (*mjd), (*fiber), Tlist[r.imin].name, r.chi2r_min, S.sn);
 
         /*progress bar*/
         if(ispec % 100 == 0)
@@ -249,19 +248,17 @@ void process_sdss_spectra(struct template *Tlist, FILE *input, FILE *output)
 struct result find_best_template(struct spectrum S, struct template *Tlist)
 {
     unsigned int i;
-    double chi2=DBL_MAX;
+    double chi2, chi2_min=DBL_MAX;
     struct result r;
 
     for(i=0; i<N_TEMPLATES; i++) {
-        interpolate_template(Tlist[i], S);
-        chi2 = calc_chi2(S);
-
-        if(chi2 < r.chi2_min) {
-            r.chi2_min = chi2; 
+        chi2 = calc_chi2(S, Tlist[i]);
+        if(chi2 < chi2_min) {
+            chi2_min = chi2; 
             r.imin = i;
         }
     }
-    r.chi2_min /= (double)(S.n-1); /*reduced chi^2*/
+    r.chi2r_min = chi2_min / (double)(S.n-1); /*reduced chi^2*/
     return r;
 }
 
@@ -304,18 +301,20 @@ void interpolate_template(struct template T, struct spectrum S)
 {
   unsigned int i, j=1;
 
-  for(i=0; i<S.n; i++) { /*only need to condition the loop on i, since spec stops before template*/
-      while(T.x[j] < S.x[i])
+  for(i=0; i<S.n; i++) { 
+      while(T.x[j] < S.x[i]) /*advance T.x[j] just past S.x[i]*/
           j++;
       S.Ti[i] = T.y[j-1] + (S.x[i]-T.x[j-1])*(T.y[j]-T.y[j-1])/(T.x[j]-T.x[j-1]);
   }
 }
 
 /*Calculate the chi2 between the template and interpolated spectrum*/
-double calc_chi2(struct spectrum S)
+double calc_chi2(struct spectrum S, struct template T)
 {
     unsigned int i;
     double Sum_st=0, Sum_tt=0, A, tmp, chi2=0;
+
+    interpolate_template(T, S);
 
     /* Find optimal scaling parameter*/
     #pragma omp simd private(tmp) reduction(+:Sum_tt,Sum_st)
