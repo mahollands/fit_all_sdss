@@ -35,28 +35,28 @@
 #define SN_CUT 0.
 
 #define DIR_TEMPLATES "../input_data/templates_text"
-#define F_TEMPLATE_LIST "../input_data/grid_all-180809.txt"
+#define F_TEMPLATE_LIST "../input_data/grid_all-180814.txt"
 
 #define F_IN        "../input_data/SDSS_dr16_spectra_binary_all.dat"
 //#define F_OUT       "../output_data/sdss_dr16_all_CVs_200430.csv"
 #define F_OUT       "../output_data/test_output.csv"
 
 /*data structures for SDSS spectra and templates*/
-typedef struct {
+struct template{
     unsigned int n;
     char name[32];
     double *x;
     double *y;
-}template;
+};
 
-typedef struct {
+struct spectrum{
     unsigned int n;
     double sn;
     double *x;
     double *y;
     double *ivar;
     double *Ti; /*Interpolated template fluxes*/
-}spectrum;
+};
 
 struct result{
     unsigned int imin;
@@ -64,22 +64,22 @@ struct result{
 };
 
 /*Function Prototypes*/
-void load_templates(template *Tlist);
-void load_templates_names_lengths(template *Tlist);
-void load_template_data(template T);
+void load_templates(struct template *Tlist);
+void load_templates_names_lengths(struct template *Tlist);
+void load_template_data(struct template T);
 void progress_bar(unsigned int n, unsigned int N);
 unsigned int set_n_threads(int argc, char **argv);
-void process_sdss_spectra(template *Tlist, FILE *input, FILE *output);
-struct result process_sdss_spectrum(template *Tlist, spectrum S);
-void process_pixel_data(float *data_buf, unsigned int n_file, spectrum *Sptr);
-void interpolate_template(template T, spectrum S);
-double calc_chisq(spectrum S);
+void process_sdss_spectra(struct template *Tlist, FILE *input, FILE *output);
+struct result process_sdss_spectrum(struct template *Tlist, struct spectrum S);
+void process_pixel_data(float *data_buf, unsigned int n_file, struct spectrum *Sptr);
+void interpolate_template(struct template T, struct spectrum S);
+double calc_chisq(struct spectrum S);
 
 /******************************* End preamble ********************************/
 
 int main(int argc, char** argv)
 {
-    template Tlist[N_TEMPLATES];
+    struct template Tlist[N_TEMPLATES];
     FILE *input, *output;
     double tic, toc;
     unsigned int i;
@@ -114,7 +114,7 @@ int main(int argc, char** argv)
 }
 
 /*Loads all templates into an array of templates*/
-void load_templates(template *Tlist)
+void load_templates(struct template *Tlist)
 {
     unsigned int i;
 
@@ -129,7 +129,7 @@ void load_templates(template *Tlist)
     puts("loaded templates into memory");
 }
 
-void load_templates_names_lengths(template *Tlist)
+void load_templates_names_lengths(struct template *Tlist)
 {
     unsigned int i;
     FILE *input;
@@ -144,7 +144,7 @@ void load_templates_names_lengths(template *Tlist)
     fclose(input);
 }
 
-void load_template_data(template T)
+void load_template_data(struct template T)
 {
     unsigned int i;
     FILE *input;
@@ -200,12 +200,12 @@ unsigned int set_n_threads(int argc, char **argv)
 }
 
 /*Loop over SDSS spectra and running in parallel*/
-void process_sdss_spectra(template *Tlist, FILE *input, FILE *output)
+void process_sdss_spectra(struct template *Tlist, FILE *input, FILE *output)
 {
     unsigned int ispec;
     unsigned int int_buf[4], *n_file, *plate, *mjd, *fiber;
     float data_buf[3*N_PX_MAX];
-    spectrum S;
+    struct spectrum S;
     double spec_mem[4*N_PX_MAX];
     struct result r;
 
@@ -248,7 +248,7 @@ void process_sdss_spectra(template *Tlist, FILE *input, FILE *output)
 }
 
 /*Loop over templates for a single spectrum, finding lowest chisq*/
-struct result process_sdss_spectrum(template *Tlist, spectrum S)
+struct result process_sdss_spectrum(struct template *Tlist, struct spectrum S)
 {
     unsigned int i;
     double chisq, chisq_min;
@@ -268,7 +268,7 @@ struct result process_sdss_spectrum(template *Tlist, spectrum S)
 }
 
 /*Process the SDSS pixel data and store and store in spectrum type*/
-void process_pixel_data(float *data_buf, unsigned int n_file, spectrum *S)
+void process_pixel_data(float *data_buf, unsigned int n_file, struct spectrum *S)
 {
     unsigned int i, n_sn=0, n=0;
     double x, sigma;
@@ -302,7 +302,7 @@ void process_pixel_data(float *data_buf, unsigned int n_file, spectrum *S)
 }
 
 /*Interpolate a template onto the spectrum axis and store in spectrum*/
-void interpolate_template(template T, spectrum S)
+void interpolate_template(struct template T, struct spectrum S)
 {
   unsigned int i, j=1;
 
@@ -314,7 +314,7 @@ void interpolate_template(template T, spectrum S)
 }
 
 /*Calculate the chisq between the template and interpolated spectrum*/
-double calc_chisq(spectrum S)
+double calc_chisq(struct spectrum S)
 {
     unsigned int i;
     double Sum_st=0, Sum_tt=0, A, tmp, chisq=0;
