@@ -14,7 +14,7 @@
  * module load intel/2019.3.199-GCC-8.3.0-2.32                                
  * icc -o outname fit_sdss_templates.c -qopenmp -xhost                        
  *                                                                            
- * Last update 2020-09-14                                                     
+ * Last update 2020-09-15
  *****************************************************************************/
 
 #include <stdio.h>
@@ -26,16 +26,16 @@
 
 //#define N_SDSS 5789198
 //#define N_SDSS 578920
-#define N_SDSS 1000
+#define N_SDSS 10000
 #define N_PX_MAX 6000
-#define N_TEMPLATES 3078
+#define N_TEMPLATES 3986
 
 #define X_MIN 3600.
 #define X_MAX 9000.
 #define SN_CUT 0.
 
 #define DIR_TEMPLATES "../input_data/templates_text"
-#define F_TEMPLATE_LIST "../input_data/templates-CV-200430.txt"
+#define F_TEMPLATE_LIST "../input_data/grid_all-180809.txt"
 
 #define F_IN        "../input_data/SDSS_dr16_spectra_binary_all.dat"
 //#define F_OUT       "../output_data/sdss_dr16_all_CVs_200430.csv"
@@ -64,13 +64,13 @@ struct result{
 };
 
 /*Function Prototypes*/
-void load_templates(template *TT);
-void load_templates_names_lengths(template *TT);
+void load_templates(template *Tlist);
+void load_templates_names_lengths(template *Tlist);
 void load_template_data(template T);
 void progress_bar(unsigned int n, unsigned int N);
 unsigned int set_n_threads(int argc, char **argv);
-void process_sdss_spectra(template *TT, FILE *input, FILE *output);
-struct result process_sdss_spectrum(template *TT, spectrum S);
+void process_sdss_spectra(template *Tlist, FILE *input, FILE *output);
+struct result process_sdss_spectrum(template *Tlist, spectrum S);
 void process_pixel_data(float *data_buffer, unsigned int n_file, spectrum *Sptr);
 void interpolate_template(template T, spectrum S);
 double calc_chisq(spectrum S);
@@ -79,13 +79,13 @@ double calc_chisq(spectrum S);
 
 int main(int argc, char** argv)
 {
-    template TT[N_TEMPLATES];
+    template Tlist[N_TEMPLATES];
     FILE *input, *output;
     double tic, toc;
     unsigned int i;
   
     set_n_threads(argc, argv); /*Set thread count if user supplied*/
-    load_templates(TT);
+    load_templates(Tlist);
   
     /*ready file I/O file*/
     input = fopen(F_IN, "rb");
@@ -97,15 +97,15 @@ int main(int argc, char** argv)
     puts("starting");
     tic = omp_get_wtime();
     #pragma omp parallel default(shared)
-    process_sdss_spectra(TT, input, output);
+    process_sdss_spectra(Tlist, input, output);
     progress_bar(N_SDSS, N_SDSS);
     toc = omp_get_wtime();
     printf("\ntime to complete = %.3f s\n", toc-tic);
   
     /*tidy up before program end*/
     for(i=0; i<N_TEMPLATES; i++) {
-        free(TT[i].x);
-        free(TT[i].y);
+        free(Tlist[i].x);
+        free(Tlist[i].y);
     }
     fclose(input);
     fclose(output);
@@ -114,22 +114,22 @@ int main(int argc, char** argv)
 }
 
 /*Loads all templates into an array of templates*/
-void load_templates(template *TT)
+void load_templates(template *Tlist)
 {
     unsigned int i;
 
     puts("loading templates");
-    load_templates_names_lengths(TT);
+    load_templates_names_lengths(Tlist);
     #pragma omp parallel for default(shared) private(i)
     for(i=0; i<N_TEMPLATES; i++) {
-        TT[i].x = (double*)malloc(TT[i].n*sizeof(double));
-        TT[i].y = (double*)malloc(TT[i].n*sizeof(double));
-        load_template_data(TT[i]);
+        Tlist[i].x = (double*)malloc(Tlist[i].n*sizeof(double));
+        Tlist[i].y = (double*)malloc(Tlist[i].n*sizeof(double));
+        load_template_data(Tlist[i]);
     }
     puts("loaded templates into memory");
 }
 
-void load_templates_names_lengths(template *TT)
+void load_templates_names_lengths(template *Tlist)
 {
     unsigned int i;
     FILE *input;
@@ -140,7 +140,7 @@ void load_templates_names_lengths(template *TT)
         exit(EXIT_FAILURE);
     }
     for(i=0; i<N_TEMPLATES; i++)
-        fscanf(input, "%s %d\n", TT[i].name, &TT[i].n);
+        fscanf(input, "%s %d\n", Tlist[i].name, &Tlist[i].n);
     fclose(input);
 }
 
@@ -200,7 +200,7 @@ unsigned int set_n_threads(int argc, char **argv)
 }
 
 /*Loop over SDSS spectra and running in parallel*/
-void process_sdss_spectra(template *TT, FILE *input, FILE *output)
+void process_sdss_spectra(template *Tlist, FILE *input, FILE *output)
 {
     unsigned int ispec;
     unsigned int intbuffer[4], *n_file, *plate, *mjd, *fiber;
@@ -234,12 +234,12 @@ void process_sdss_spectra(template *TT, FILE *input, FILE *output)
             continue; 
 
         /* Loop over templates */
-        r = process_sdss_spectrum(TT, S);
+        r = process_sdss_spectrum(Tlist, S);
 
         /*output to file*/
         fprintf(output, "%05d-%05d-%04d,%s,%.3e,%.3e\n",
         (*plate), (*mjd), (*fiber),
-        TT[r.imin].name, r.chisq_min_red, S.sn);
+        Tlist[r.imin].name, r.chisq_min_red, S.sn);
 
         /*progress bar*/
         if(ispec % 100 == 0)
@@ -248,14 +248,14 @@ void process_sdss_spectra(template *TT, FILE *input, FILE *output)
 }
 
 /*Loop over templates for a single spectrum, finding lowest chisq*/
-struct result process_sdss_spectrum(template *TT, spectrum S)
+struct result process_sdss_spectrum(template *Tlist, spectrum S)
 {
     unsigned int i;
     double chisq, chisq_min;
     struct result r;
 
     for(chisq_min=DBL_MAX, i=0; i<N_TEMPLATES; i++) {
-        interpolate_template(TT[i], S);
+        interpolate_template(Tlist[i], S);
         chisq = calc_chisq(S);
 
         if(chisq < chisq_min) {
