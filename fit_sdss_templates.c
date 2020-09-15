@@ -28,7 +28,7 @@
 //#define N_SDSS 578920
 #define N_SDSS 10000
 #define N_PX_MAX 6000
-#define N_TEMPLATES 3986
+#define N_TEMPLATES 4187
 
 #define X_MIN 3600.
 #define X_MAX 9000.
@@ -70,7 +70,7 @@ void load_template_data(struct template T);
 void progress_bar(unsigned int n, unsigned int N);
 unsigned int set_n_threads(int argc, char **argv);
 void process_sdss_spectra(struct template *Tlist, FILE *input, FILE *output);
-struct result process_sdss_spectrum(struct template *Tlist, struct spectrum S);
+struct result find_best_template(struct spectrum S, struct template *Tlist);
 void process_pixel_data(float *data_buf, unsigned int n_file, struct spectrum *Sptr);
 void interpolate_template(struct template T, struct spectrum S);
 double calc_chisq(struct spectrum S);
@@ -234,12 +234,11 @@ void process_sdss_spectra(struct template *Tlist, FILE *input, FILE *output)
             continue; 
 
         /* Loop over templates */
-        r = process_sdss_spectrum(Tlist, S);
+        r = find_best_template(S, Tlist);
 
         /*output to file*/
         fprintf(output, "%05d-%05d-%04d,%s,%.3e,%.3e\n",
-        (*plate), (*mjd), (*fiber),
-        Tlist[r.imin].name, r.chisq_min_red, S.sn);
+        (*plate), (*mjd), (*fiber), Tlist[r.imin].name, r.chisq_min_red, S.sn);
 
         /*progress bar*/
         if(ispec % 100 == 0)
@@ -248,7 +247,7 @@ void process_sdss_spectra(struct template *Tlist, FILE *input, FILE *output)
 }
 
 /*Loop over templates for a single spectrum, finding lowest chisq*/
-struct result process_sdss_spectrum(struct template *Tlist, struct spectrum S)
+struct result find_best_template(struct spectrum S, struct template *Tlist)
 {
     unsigned int i;
     double chisq, chisq_min;
