@@ -71,7 +71,7 @@ void progress_bar(unsigned int n, unsigned int N);
 unsigned int set_n_threads(int argc, char **argv);
 void process_sdss_spectra(template *Tlist, FILE *input, FILE *output);
 struct result process_sdss_spectrum(template *Tlist, spectrum S);
-void process_pixel_data(float *data_buffer, unsigned int n_file, spectrum *Sptr);
+void process_pixel_data(float *data_buf, unsigned int n_file, spectrum *Sptr);
 void interpolate_template(template T, spectrum S);
 double calc_chisq(spectrum S);
 
@@ -203,8 +203,8 @@ unsigned int set_n_threads(int argc, char **argv)
 void process_sdss_spectra(template *Tlist, FILE *input, FILE *output)
 {
     unsigned int ispec;
-    unsigned int intbuffer[4], *n_file, *plate, *mjd, *fiber;
-    float data_buffer[3*N_PX_MAX];
+    unsigned int int_buf[4], *n_file, *plate, *mjd, *fiber;
+    float data_buf[3*N_PX_MAX];
     spectrum S;
     double spec_mem[4*N_PX_MAX];
     struct result r;
@@ -214,10 +214,10 @@ void process_sdss_spectra(template *Tlist, FILE *input, FILE *output)
     S.y    = spec_mem +   N_PX_MAX;
     S.ivar = spec_mem + 2*N_PX_MAX;
     S.Ti   = spec_mem + 3*N_PX_MAX;
-    n_file = intbuffer;
-    plate = intbuffer + 1;
-    mjd   = intbuffer + 2;
-    fiber = intbuffer + 3;
+    n_file = int_buf;
+    plate  = int_buf + 1;
+    mjd    = int_buf + 2;
+    fiber  = int_buf + 3;
 
     /*start parallel for loop. (dynamic,1) is fastest, as each thread works on
     one file at a time, and progress bar usually updates correctly*/
@@ -226,10 +226,10 @@ void process_sdss_spectra(template *Tlist, FILE *input, FILE *output)
         /* READ SDSS SPECTRUM */
         #pragma omp critical
         {
-            fread(intbuffer, sizeof(unsigned int), 4, input);
-            fread(data_buffer, sizeof(float), 3*(*n_file), input);
+            fread(int_buf, sizeof(unsigned int), 4, input);
+            fread(data_buf, sizeof(float), 3*(*n_file), input);
         }
-        process_pixel_data(data_buffer, (*n_file), &S);
+        process_pixel_data(data_buf, (*n_file), &S);
         if(S.sn < SN_CUT || isnan(S.sn) || S.n < 1000)
             continue; 
 
@@ -268,7 +268,7 @@ struct result process_sdss_spectrum(template *Tlist, spectrum S)
 }
 
 /*Process the SDSS pixel data and store and store in spectrum type*/
-void process_pixel_data(float *data_buffer, unsigned int n_file, spectrum *S)
+void process_pixel_data(float *data_buf, unsigned int n_file, spectrum *S)
 {
     unsigned int i, n_sn=0, n=0;
     double x, sigma;
@@ -276,7 +276,7 @@ void process_pixel_data(float *data_buffer, unsigned int n_file, spectrum *S)
 
     /*Loop over sdss spectrum pixels*/
     for(i=0; i<n_file; i++) {
-        x = (double)data_buffer[3*i];
+        x = (double)data_buf[3*i];
         if(x>X_MAX) /*make sure we only load data covered by the templates*/
             break;
         if(x<X_MIN)
@@ -284,8 +284,8 @@ void process_pixel_data(float *data_buffer, unsigned int n_file, spectrum *S)
         if(x > 5560. && x < 5590.) /*bad sky subtraction line in SDSS*/
             continue;
         S->x[n] = x;
-        S->y[n] = (double)data_buffer[3*i+1];
-        sigma = (double)data_buffer[3*i+2];
+        S->y[n] = (double)data_buf[3*i+1];
+        sigma = (double)data_buf[3*i+2];
         S->ivar[n] = 1/(sigma*sigma);
 
         /*Also do signal to noise*/
