@@ -3,7 +3,7 @@
  * interpolated onto the same wavelength axis as the SDSS spectrum. These are
  * optimally fitted to the SDSS spectrum. The template with the minimum chi2
  * is the winner. The loop over files uses all available CPU cores. The SDSS
- * name, best template, chisq and S/N are finally written to disk.          
+ * name, best template, chi2 and S/N are finally written to disk.          
  *                                                                            
  * Compile with:                                                              
  *                                                                            
@@ -14,7 +14,6 @@
  * module load intel/2019.3.199-GCC-8.3.0-2.32                                
  * icc -o outname fit_sdss_templates.c -qopenmp -xhost                        
  *                                                                            
- * Last update 2020-09-15
  *****************************************************************************/
 
 #include <stdio.h>
@@ -60,7 +59,7 @@ struct spectrum{
 
 struct result{
     unsigned int imin;
-    double chisq_min_red;
+    double chi2_min;
 };
 
 /*Function Prototypes*/
@@ -73,7 +72,7 @@ void process_sdss_spectra(struct template *Tlist, FILE *input, FILE *output);
 struct result find_best_template(struct spectrum S, struct template *Tlist);
 void process_pixel_data(float *data_buf, unsigned int n_file, struct spectrum *Sptr);
 void interpolate_template(struct template T, struct spectrum S);
-double calc_chisq(struct spectrum S);
+double calc_chi2(struct spectrum S);
 
 /******************************* End preamble ********************************/
 
@@ -238,7 +237,7 @@ void process_sdss_spectra(struct template *Tlist, FILE *input, FILE *output)
 
         /*output to file*/
         fprintf(output, "%05d-%05d-%04d,%s,%.3e,%.3e\n",
-        (*plate), (*mjd), (*fiber), Tlist[r.imin].name, r.chisq_min_red, S.sn);
+        (*plate), (*mjd), (*fiber), Tlist[r.imin].name, r.chi2_min, S.sn);
 
         /*progress bar*/
         if(ispec % 100 == 0)
@@ -246,23 +245,23 @@ void process_sdss_spectra(struct template *Tlist, FILE *input, FILE *output)
     }
 }
 
-/*Loop over templates for a single spectrum, finding lowest chisq*/
+/*Loop over templates for a single spectrum, finding lowest chi2*/
 struct result find_best_template(struct spectrum S, struct template *Tlist)
 {
     unsigned int i;
-    double chisq, chisq_min;
+    double chi2;
     struct result r;
 
-    for(chisq_min=DBL_MAX, i=0; i<N_TEMPLATES; i++) {
+    for(chi2_min=DBL_MAX, i=0; i<N_TEMPLATES; i++) {
         interpolate_template(Tlist[i], S);
-        chisq = calc_chisq(S);
+        chi2 = calc_chi2(S);
 
-        if(chisq < chisq_min) {
-            chisq_min = chisq; 
+        if(chi2 < r.chi2_min) {
+            r.chi2_min = chi2; 
             r.imin = i;
         }
     }
-    r.chisq_min_red = chisq_min / (double)(S.n-1);
+    r.chi2_min /= (double)(S.n-1); /*reduced chi^2*/
     return r;
 }
 
@@ -312,11 +311,11 @@ void interpolate_template(struct template T, struct spectrum S)
   }
 }
 
-/*Calculate the chisq between the template and interpolated spectrum*/
-double calc_chisq(struct spectrum S)
+/*Calculate the chi2 between the template and interpolated spectrum*/
+double calc_chi2(struct spectrum S)
 {
     unsigned int i;
-    double Sum_st=0, Sum_tt=0, A, tmp, chisq=0;
+    double Sum_st=0, Sum_tt=0, A, tmp, chi2=0;
 
     /* Find optimal scaling parameter*/
     #pragma omp simd private(tmp) reduction(+:Sum_tt,Sum_st)
@@ -328,11 +327,11 @@ double calc_chisq(struct spectrum S)
     /* optimal A */
     A = Sum_st/Sum_tt; 
 
-    /*calc chisq with optimal A*/
-    #pragma omp simd private(tmp) reduction(+:chisq)
+    /*calc chi2 with optimal A*/
+    #pragma omp simd private(tmp) reduction(+:chi2)
     for(i=0; i<S.n; i++) {
         tmp = S.y[i] - A*S.Ti[i];
-        chisq += tmp * tmp * S.ivar[i];
+        chi2 += tmp * tmp * S.ivar[i];
     }
-    return chisq;
+    return chi2;
 }
