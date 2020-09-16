@@ -105,7 +105,7 @@ int main(int argc, char** argv)
         free(Tlist[i].x);
         free(Tlist[i].y);
     }
-    fclose(input);
+        
     fclose(output);
   
     return EXIT_SUCCESS;
@@ -299,13 +299,17 @@ void process_pixel_data(float *data_buf, unsigned int n_file, struct spectrum *S
 /*Interpolate a template onto the spectrum axis and store in spectrum*/
 void interpolate_template(struct template T, struct spectrum S)
 {
-  unsigned int i, j=1;
+    unsigned int i, j;
+    double f;
 
-  for(i=0; i<S.n; i++) { 
-      while(T.x[j] < S.x[i]) /*advance T.x[j] just past S.x[i]*/
-          j++;
-      S.Ti[i] = T.y[j-1] + (S.x[i]-T.x[j-1])*(T.y[j]-T.y[j-1])/(T.x[j]-T.x[j-1]);
-  }
+    for(i=0, j=1; i<S.n; i++) { 
+        while(T.x[j] < S.x[i]) /*advance T.x[j] just past S.x[i]*/
+            j++;
+        /*pre-computing gradient is actually 15% slower*/
+        f = (S.x[i]-T.x[j-1])/(T.x[j]-T.x[j-1]);
+        S.Ti[i] = T.y[j-1]*(1-f) + T.y[j]*f;
+
+    }
 }
 
 /*Calculate the chi2 between the template and interpolated spectrum*/
